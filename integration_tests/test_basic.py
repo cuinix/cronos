@@ -47,12 +47,13 @@ def test_ica_enabled(cronos, tmp_path):
     param1 = get_expedited_params(param0)
     # governance module account as signer
     authority = module_address("gov")
+    msg = "/cosmos.gov.v1.MsgUpdateParams"
     submit_gov_proposal(
         cronos,
-        tmp_path,
+        msg,
         messages=[
             {
-                "@type": "/cosmos.gov.v1.MsgUpdateParams",
+                "@type": msg,
                 "authority": authority,
                 "params": {
                     **param0,
@@ -66,13 +67,13 @@ def test_ica_enabled(cronos, tmp_path):
     p = cli.query_ica_params()
     assert p["controller_enabled"]
     p["controller_enabled"] = False
-    type = "/ibc.applications.interchain_accounts.controller.v1.MsgUpdateParams"
+    msg = "/ibc.applications.interchain_accounts.controller.v1.MsgUpdateParams"
     submit_gov_proposal(
         cronos,
-        tmp_path,
+        msg,
         messages=[
             {
-                "@type": type,
+                "@type": msg,
                 "signer": authority,
                 "params": p,
             }
@@ -546,6 +547,7 @@ def assert_receipt_transaction_and_block(w3, futures):
 
     block_number = w3.eth.get_block_number()
     tx_indexes = [0, 1, 2, 3]
+
     for receipt in receipts:
         # check in the same block
         assert receipt["blockNumber"] == block_number
@@ -553,6 +555,25 @@ def assert_receipt_transaction_and_block(w3, futures):
         transaction_index = receipt["transactionIndex"]
         assert transaction_index in tx_indexes
         tx_indexes.remove(transaction_index)
+
+    # check block receipts
+
+    receipts.sort(key=lambda receipt: receipt["transactionIndex"])
+    block_receipts = w3.provider.make_request("eth_getBlockReceipts", [block_number])[
+        "result"
+    ]
+    assert len(block_receipts) == 4
+    for i, block_receipt in enumerate(block_receipts):
+        assert block_receipt["blockNumber"] == hex(receipts[i]["blockNumber"])
+        assert block_receipt["transactionHash"] == receipts[i]["transactionHash"].hex()
+        assert block_receipt["cumulativeGasUsed"] == hex(
+            receipts[i]["cumulativeGasUsed"]
+        )
+        assert block_receipt["effectiveGasPrice"] == hex(
+            receipts[i]["effectiveGasPrice"]
+        )
+        assert block_receipt["from"] == receipts[i]["from"].lower()
+        assert block_receipt["gasUsed"] == hex(receipts[i]["gasUsed"])
 
     block = w3.eth.get_block(block_number)
     # print(block)
@@ -920,12 +941,12 @@ def test_replay_protection(cronos):
 
 
 @pytest.mark.gov
-def test_submit_any_proposal(cronos, tmp_path):
-    submit_any_proposal(cronos, tmp_path)
+def test_submit_any_proposal(cronos):
+    submit_any_proposal(cronos)
 
 
 @pytest.mark.gov
-def test_submit_send_enabled(cronos, tmp_path):
+def test_submit_send_enabled(cronos):
     # check bank send enable
     cli = cronos.cosmos_cli()
     denoms = ["basetcro", "stake"]
@@ -935,12 +956,13 @@ def test_submit_send_enabled(cronos, tmp_path):
         {"denom": "stake", "enabled": True},
     ]
     authority = module_address("gov")
+    msg = "/cosmos.bank.v1beta1.MsgSetSendEnabled"
     submit_gov_proposal(
         cronos,
-        tmp_path,
+        msg,
         messages=[
             {
-                "@type": "/cosmos.bank.v1beta1.MsgSetSendEnabled",
+                "@type": msg,
                 "authority": authority,
                 "sendEnabled": send_enable,
             }
